@@ -15,9 +15,14 @@
   box-sizing: border-box;
 }
 
+html {
+  height: 100%;
+}
+
 body {
   margin: 0;
-  min-height: 100vh;
+  height: 100%;
+  overflow: hidden;
   font-family: "Trebuchet MS", "Segoe UI", sans-serif;
   color: var(--text);
   background:
@@ -29,7 +34,8 @@ body {
   display: grid;
   grid-template-rows: auto 1fr;
   gap: 12px;
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   padding: 14px;
 }
 
@@ -146,9 +152,15 @@ button:hover,
 
 .arena-panel {
   position: relative;
-  min-height: 520px;
+  min-height: 0;
   border-radius: 18px;
   overflow: hidden;
+}
+
+.arena-panel:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  border-radius: 0;
 }
 
 #simCanvas {
@@ -174,10 +186,6 @@ button:hover,
 @media (max-width: 720px) {
   .app-shell {
     padding: 10px;
-  }
-
-  .arena-panel {
-    min-height: 72vh;
   }
 
   .canvas-hint {

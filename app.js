@@ -2865,6 +2865,15 @@ function resetWorld() {
   syncHud();
 }
 
+function resizeCanvasAfterLayout() {
+  resizeCanvas();
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      resizeCanvas();
+    });
+  });
+}
+
 function getCanvasPoint(event) {
   const rect = canvas.getBoundingClientRect();
   return {
@@ -2974,12 +2983,12 @@ fullscreenButton.addEventListener("click", async () => {
 });
 
 window.addEventListener("resize", () => {
-  resizeCanvas();
+  resizeCanvasAfterLayout();
 });
 
 document.addEventListener("fullscreenchange", () => {
   syncFullscreenButton();
-  resizeCanvas();
+  resizeCanvasAfterLayout();
 });
 
 resizeCanvas();
