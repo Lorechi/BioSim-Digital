@@ -31,6 +31,7 @@ body {
 }
 
 .app-shell {
+  position: relative;
   display: grid;
   grid-template-rows: auto 1fr;
   gap: 12px;
@@ -50,6 +51,10 @@ body {
 .hud-panel {
   border-radius: 16px;
   padding: 12px;
+}
+
+.settings-button {
+  display: none;
 }
 
 .hud-row,
@@ -185,7 +190,71 @@ button:hover,
 
 @media (max-width: 720px) {
   .app-shell {
-    padding: 10px;
+    display: block;
+    padding: 0;
+  }
+
+  .hud-panel {
+    position: fixed;
+    z-index: 20;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    max-height: calc(100dvh - 20px);
+    overflow-y: auto;
+    border-radius: 14px;
+    transform: translateY(calc(-100% - 18px));
+    transition: transform 180ms ease;
+  }
+
+  .settings-open .hud-panel {
+    transform: translateY(0);
+  }
+
+  .settings-button {
+    position: fixed;
+    z-index: 30;
+    top: 12px;
+    right: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 38px;
+    padding: 8px 11px;
+    border-radius: 999px;
+    background: rgba(7, 22, 24, 0.82);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.32);
+    backdrop-filter: blur(10px);
+  }
+
+  .settings-open .settings-button {
+    top: 18px;
+    right: 18px;
+  }
+
+  .hud-row,
+  .controls-row {
+    padding-right: 92px;
+  }
+
+  .metric {
+    flex: 1 1 118px;
+  }
+
+  .metric-wide {
+    flex-basis: 100%;
+  }
+
+  #fullscreenButton {
+    display: none;
+  }
+
+  .arena-panel {
+    width: 100vw;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
   }
 
   .canvas-hint {

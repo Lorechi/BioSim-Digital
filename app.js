@@ -11,6 +11,7 @@ const speedValue = document.getElementById("speedValue");
 const pauseButton = document.getElementById("pauseButton");
 const resetButton = document.getElementById("resetButton");
 const fullscreenButton = document.getElementById("fullscreenButton");
+const settingsButton = document.getElementById("settingsButton");
 const networkToggle = document.getElementById("networkToggle");
 const debugToggle = document.getElementById("debugToggle");
 const catModeToggle = document.getElementById("catModeToggle");
@@ -2840,6 +2841,11 @@ function syncFullscreenButton() {
   fullscreenButton.textContent = document.fullscreenElement ? "Exit fullscreen" : "Fullscreen";
 }
 
+function setSettingsOpen(open) {
+  document.body.classList.toggle("settings-open", open);
+  settingsButton.setAttribute("aria-expanded", String(open));
+}
+
 function tick(timestamp) {
   if (!state.lastFrameAt) {
     state.lastFrameAt = timestamp;
@@ -2982,7 +2988,15 @@ fullscreenButton.addEventListener("click", async () => {
   }
 });
 
+settingsButton.addEventListener("click", () => {
+  setSettingsOpen(!document.body.classList.contains("settings-open"));
+  resizeCanvasAfterLayout();
+});
+
 window.addEventListener("resize", () => {
+  if (!window.matchMedia("(max-width: 720px)").matches) {
+    setSettingsOpen(false);
+  }
   resizeCanvasAfterLayout();
 });
 
