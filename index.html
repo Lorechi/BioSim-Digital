@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ecosystem Simulation</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <section class="hud-panel">
+      <div class="hud-row">
+        <div class="metric">
+          <span class="metric-label">Carnivores</span>
+          <strong id="carnivoreValue">0</strong>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Herbivores</span>
+          <strong id="herbivoreValue">0</strong>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Plants</span>
+          <strong id="plantValue">0</strong>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Bodies</span>
+          <strong id="bodyValue">0</strong>
+        </div>
+        <div class="metric metric-wide">
+          <span class="metric-label">Camera</span>
+          <strong id="cameraStatusValue">Starting camera...</strong>
+        </div>
+      </div>
+      <div class="controls-row">
+        <button id="pauseButton" type="button">Pause</button>
+        <button id="resetButton" type="button">Reset</button>
+        <button id="fullscreenButton" type="button">Fullscreen</button>
+        <label class="slider-group">
+          <span>Speed</span>
+          <input id="speedInput" type="range" min="0.25" max="3" value="2" step="0.25">
+          <strong id="speedValue">2.00x</strong>
+        </label>
+        <label class="toggle">
+          <input id="networkToggle" type="checkbox" checked>
+          <span>Plant network</span>
+        </label>
+        <label class="toggle">
+          <input id="debugToggle" type="checkbox">
+          <span>Debug mode</span>
+        </label>
+        <label class="toggle">
+          <input id="catModeToggle" type="checkbox">
+          <span>Cat mode</span>
+        </label>
+      </div>
+    </section>
+    <section class="arena-panel">
+      <canvas id="simCanvas" aria-label="ecosystem simulation arena"></canvas>
+      <video id="cameraVideo" class="hidden-media" autoplay playsinline muted></video>
+      <canvas id="analysisCanvas" class="hidden-media" aria-hidden="true"></canvas>
+    </section>
+  </main>
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
