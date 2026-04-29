@@ -155,10 +155,8 @@ button:hover,
   display: block;
   width: 100%;
   height: 100%;
-}
-
-.hidden-media {
-  display: none;
+  cursor: grab;
+  touch-action: none;
 }
 
 .canvas-hint {

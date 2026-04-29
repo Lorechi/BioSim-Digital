@@ -1,28 +1,4 @@
 const BIOSIM_CONFIG = {
-  cameraTracker: {
-    sampleStep: 4,
-    analysisScale: 0.5,
-    minAnalysisIntervalMs: 50,
-    smoothing: 0.2,
-    lingerMs: 2500,
-    minColorPixels: 60,
-
-    yellowHueMin: 50,
-    yellowHueMax: 80,
-    yellowSatMin: 45,
-    yellowValMin: 25,
-
-    redHueMin: 360,
-    redHueMax: 10,
-    redSatMin: 55,
-    redValMin: 30,
-
-    greenHueMin: 110,
-    greenHueMax: 185,
-    greenSatMin: 30,
-    greenValMin: 10,
-  },
-
   spawners: {
     herbivore: { x: 120, y: 120 },
     carnivore: { x: 220, y: 160 },

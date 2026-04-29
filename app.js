@@ -1,14 +1,11 @@
 const canvas = document.getElementById("simCanvas");
 const ctx = canvas.getContext("2d");
-const cameraVideo = document.getElementById("cameraVideo");
-const analysisCanvas = document.getElementById("analysisCanvas");
-const analysisCtx = analysisCanvas.getContext("2d", { willReadFrequently: true });
 
 const plantValue = document.getElementById("plantValue");
 const bodyValue = document.getElementById("bodyValue");
 const herbivoreValue = document.getElementById("herbivoreValue");
 const carnivoreValue = document.getElementById("carnivoreValue");
-const cameraStatusValue = document.getElementById("cameraStatusValue");
+const spawnerStatusValue = document.getElementById("spawnerStatusValue");
 const speedInput = document.getElementById("speedInput");
 const speedValue = document.getElementById("speedValue");
 const pauseButton = document.getElementById("pauseButton");
@@ -18,9 +15,9 @@ const networkToggle = document.getElementById("networkToggle");
 const debugToggle = document.getElementById("debugToggle");
 const catModeToggle = document.getElementById("catModeToggle");
 const arenaPanel = document.querySelector(".arena-panel");
-const CAMERA_TRACKER = BIOSIM_CONFIG.cameraTracker;
 const WORLD = BIOSIM_CONFIG.world;
 const SPAWNER_DEFAULTS = BIOSIM_CONFIG.spawners;
+const SPAWNER_KINDS = ["herbivore", "carnivore", "plant"];
 
 const state = {
   width: 0,
@@ -41,39 +38,20 @@ const state = {
   nextPacketId: 1,
   paused: false,
   lastFrameAt: 0,
-  lastCameraAnalysisAt: 0,
   speedMultiplier: Number(speedInput.value),
   worldAge: 0,
   activeFeeds: [],
   spawners: {
-    herbivore: { x: SPAWNER_DEFAULTS.herbivore.x, y: SPAWNER_DEFAULTS.herbivore.y, enabled: false, blockedByThicket: false, wasEnabled: false, nextSpawnIn: 0, visibleScale: 0 },
-    carnivore: { x: SPAWNER_DEFAULTS.carnivore.x, y: SPAWNER_DEFAULTS.carnivore.y, enabled: false, blockedByThicket: false, wasEnabled: false, nextSpawnIn: 0, visibleScale: 0 },
-    plant: { x: SPAWNER_DEFAULTS.plant.x, y: SPAWNER_DEFAULTS.plant.y, enabled: false, blockedByThicket: false, wasEnabled: false, nextSpawnIn: 0, visibleScale: 0 },
+    herbivore: { x: SPAWNER_DEFAULTS.herbivore.x, y: SPAWNER_DEFAULTS.herbivore.y, seatX: SPAWNER_DEFAULTS.herbivore.x, seatY: SPAWNER_DEFAULTS.herbivore.y, enabled: false, blockedByThicket: false, wasEnabled: false, nextSpawnIn: 0, visibleScale: 1, dragging: false },
+    carnivore: { x: SPAWNER_DEFAULTS.carnivore.x, y: SPAWNER_DEFAULTS.carnivore.y, seatX: SPAWNER_DEFAULTS.carnivore.x, seatY: SPAWNER_DEFAULTS.carnivore.y, enabled: false, blockedByThicket: false, wasEnabled: false, nextSpawnIn: 0, visibleScale: 1, dragging: false },
+    plant: { x: SPAWNER_DEFAULTS.plant.x, y: SPAWNER_DEFAULTS.plant.y, seatX: SPAWNER_DEFAULTS.plant.x, seatY: SPAWNER_DEFAULTS.plant.y, enabled: false, blockedByThicket: false, wasEnabled: false, nextSpawnIn: 0, visibleScale: 1, dragging: false },
   },
-  cameraReady: false,
-};
-
-const trackedDots = {
-  yellow: createTrackedDot("yellow", "herbivore"),
-  red: createTrackedDot("red", "carnivore"),
-  green: createTrackedDot("green", "plant"),
+  draggedSpawnerKind: null,
+  draggedPointerId: null,
 };
 
 function randomInRange(min, max) {
   return min + Math.random() * (max - min);
-}
-
-function createTrackedDot(color, spawnerKind) {
-  return {
-    color,
-    spawnerKind,
-    x: 0,
-    y: 0,
-    targetX: 0,
-    targetY: 0,
-    active: false,
-    lastSeenAt: 0,
-  };
 }
 
 function clamp(value, min, max) {
@@ -92,211 +70,18 @@ function lerp(a, b, t) {
   return a + (b - a) * t;
 }
 
-function setCameraStatus(message) {
-  cameraStatusValue.textContent = message;
-}
-
-function rgbToHsv(r, g, b) {
-  const red = r / 255;
-  const green = g / 255;
-  const blue = b / 255;
-  const max = Math.max(red, green, blue);
-  const min = Math.min(red, green, blue);
-  const delta = max - min;
-
-  let hue = 0;
-  if (delta !== 0) {
-    if (max === red) {
-      hue = ((green - blue) / delta) % 6;
-    } else if (max === green) {
-      hue = (blue - red) / delta + 2;
-    } else {
-      hue = (red - green) / delta + 4;
-    }
-  }
-
-  hue = Math.round(hue * 60);
-  if (hue < 0) {
-    hue += 360;
-  }
-
-  const saturation = max === 0 ? 0 : (delta / max) * 100;
-  const value = max * 100;
-  return { h: hue, s: saturation, v: value };
-}
-
-function hueInRange(hue, min, max) {
-  if (min <= max) {
-    return hue >= min && hue <= max;
-  }
-
-  return hue >= min || hue <= max;
-}
-
-function detectTrackedColor(frame, width, height, colorName) {
-  const data = frame.data;
-  const matchesColor = colorName === "yellow"
-    ? (hsv) => hueInRange(hsv.h, CAMERA_TRACKER.yellowHueMin, CAMERA_TRACKER.yellowHueMax)
-      && hsv.s >= CAMERA_TRACKER.yellowSatMin
-      && hsv.v >= CAMERA_TRACKER.yellowValMin
-    : colorName === "red"
-      ? (hsv) => hueInRange(hsv.h, CAMERA_TRACKER.redHueMin, CAMERA_TRACKER.redHueMax)
-        && hsv.s >= CAMERA_TRACKER.redSatMin
-        && hsv.v >= CAMERA_TRACKER.redValMin
-      : (hsv) => hueInRange(hsv.h, CAMERA_TRACKER.greenHueMin, CAMERA_TRACKER.greenHueMax)
-        && hsv.s >= CAMERA_TRACKER.greenSatMin
-        && hsv.v >= CAMERA_TRACKER.greenValMin;
-
-  let count = 0;
-  let sumX = 0;
-  let sumY = 0;
-
-  for (let y = 0; y < height; y += CAMERA_TRACKER.sampleStep) {
-    for (let x = 0; x < width; x += CAMERA_TRACKER.sampleStep) {
-      const dataIndex = (y * width + x) * 4;
-      const hsv = rgbToHsv(data[dataIndex], data[dataIndex + 1], data[dataIndex + 2]);
-      if (!matchesColor(hsv)) {
-        continue;
-      }
-
-      count += 1;
-      sumX += x;
-      sumY += y;
-    }
-  }
-
-  const analysisScale = Math.max(width / Math.max(state.width, 1), height / Math.max(state.height, 1));
-  const minColorPixels = Math.max(1, CAMERA_TRACKER.minColorPixels * analysisScale * analysisScale);
-  if (count < minColorPixels) {
-    return null;
-  }
-
-  return {
-    color: colorName,
-    x: sumX / count,
-    y: sumY / count,
-  };
-}
-
-function updateTrackedSpawnerPositions(detections, now) {
-  for (const color of ["yellow", "red", "green"]) {
-    const tracked = trackedDots[color];
-    const detection = detections.find((item) => item.color === color);
-    const spawner = state.spawners[tracked.spawnerKind];
-
-    if (detection) {
-      tracked.targetX = detection.x;
-      tracked.targetY = detection.y;
-      if (!tracked.active) {
-        tracked.x = detection.x;
-        tracked.y = detection.y;
-        tracked.active = true;
-      }
-      tracked.lastSeenAt = now;
-    }
-
-    if (tracked.active) {
-      tracked.x += (tracked.targetX - tracked.x) * CAMERA_TRACKER.smoothing;
-      tracked.y += (tracked.targetY - tracked.y) * CAMERA_TRACKER.smoothing;
-
-      if (now - tracked.lastSeenAt > CAMERA_TRACKER.lingerMs) {
-        tracked.active = false;
-      }
-    }
-
-    if (tracked.active) {
-      spawner.x = clamp(tracked.x, WORLD.spawnerDragRadius, state.width - WORLD.spawnerDragRadius);
-      spawner.y = clamp(tracked.y, WORLD.spawnerDragRadius, state.height - WORLD.spawnerDragRadius);
-      spawner.blockedByThicket = isPointInsideThicket(spawner.x, spawner.y);
-      spawner.enabled = !spawner.blockedByThicket;
-    } else {
-      spawner.blockedByThicket = false;
-      spawner.enabled = false;
-    }
-  }
+function setSpawnerStatus(message) {
+  spawnerStatusValue.textContent = message;
 }
 
 function updateSpawnerAnimations(dt) {
   const blend = 1 - Math.exp(-WORLD.spawnerOpenCloseSpeed * dt);
   for (const spawner of Object.values(state.spawners)) {
-    const targetScale = spawner.enabled || spawner.blockedByThicket ? 1 : 0;
+    const targetScale = 1;
     spawner.visibleScale += (targetScale - spawner.visibleScale) * blend;
     if (Math.abs(spawner.visibleScale - targetScale) < 0.001) {
       spawner.visibleScale = targetScale;
     }
-  }
-}
-
-function analyzeCameraFrame(now = performance.now()) {
-  if (!state.cameraReady || cameraVideo.readyState < 2 || state.width <= 0 || state.height <= 0) {
-    requestAnimationFrame(analyzeCameraFrame);
-    return;
-  }
-
-  if (now - state.lastCameraAnalysisAt < CAMERA_TRACKER.minAnalysisIntervalMs) {
-    requestAnimationFrame(analyzeCameraFrame);
-    return;
-  }
-  state.lastCameraAnalysisAt = now;
-
-  const analysisScale = CAMERA_TRACKER.analysisScale;
-  const analysisWidth = Math.max(1, Math.round(state.width * analysisScale));
-  const analysisHeight = Math.max(1, Math.round(state.height * analysisScale));
-  if (analysisCanvas.width !== analysisWidth || analysisCanvas.height !== analysisHeight) {
-    analysisCanvas.width = analysisWidth;
-    analysisCanvas.height = analysisHeight;
-  }
-
-  analysisCtx.drawImage(cameraVideo, 0, 0, analysisWidth, analysisHeight);
-  const frame = analysisCtx.getImageData(0, 0, analysisWidth, analysisHeight);
-  const detections = [
-    detectTrackedColor(frame, analysisWidth, analysisHeight, "yellow"),
-    detectTrackedColor(frame, analysisWidth, analysisHeight, "red"),
-    detectTrackedColor(frame, analysisWidth, analysisHeight, "green"),
-  ].filter(Boolean).map((detection) => ({
-    ...detection,
-    x: detection.x / analysisScale,
-    y: detection.y / analysisScale,
-  }));
-
-  updateTrackedSpawnerPositions(detections, now);
-
-  if (detections.length > 0) {
-    const labels = detections.map((item) => item.color).join(" + ");
-    setCameraStatus(`Tracking ${labels}`);
-  } else if (Object.values(trackedDots).some((tracked) => tracked.active)) {
-    setCameraStatus("Holding last tracked spawner position");
-  } else {
-    setCameraStatus("Show yellow, red, or green to drive spawners");
-  }
-
-  requestAnimationFrame(analyzeCameraFrame);
-}
-
-async function startCameraTracking() {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    setCameraStatus("Camera API unavailable in this browser");
-    return;
-  }
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-        facingMode: "environment",
-      },
-      audio: false,
-    });
-
-    cameraVideo.srcObject = stream;
-    await cameraVideo.play();
-    state.cameraReady = true;
-    setCameraStatus("Camera live: yellow = herbivores, red = carnivores, green = plants");
-    requestAnimationFrame(analyzeCameraFrame);
-  } catch (error) {
-    console.error(error);
-    setCameraStatus("Camera blocked. Allow webcam access to control spawners");
   }
 }
 
@@ -354,6 +139,52 @@ function getThicketBounds() {
 function isPointInsideThicket(x, y) {
   const bounds = getThicketBounds();
   return x < bounds.left || x > bounds.right || y < bounds.top || y > bounds.bottom;
+}
+
+function layoutSpawnerSeats() {
+  const bounds = getThicketBounds();
+  const seatX = Math.max(WORLD.spawnerDragRadius + 4, bounds.left * 0.5);
+  const verticalSpace = Math.max(bounds.bottom - bounds.top, 1);
+  const seatRatios = {
+    plant: 0.28,
+    herbivore: 0.5,
+    carnivore: 0.72,
+  };
+
+  for (const kind of SPAWNER_KINDS) {
+    const spawner = state.spawners[kind];
+    spawner.seatX = seatX;
+    spawner.seatY = bounds.top + verticalSpace * seatRatios[kind];
+
+    if (!spawner.dragging) {
+      spawner.x = spawner.seatX;
+      spawner.y = spawner.seatY;
+    }
+  }
+}
+
+function snapSpawnerToSeat(kind) {
+  const spawner = state.spawners[kind];
+  spawner.x = spawner.seatX;
+  spawner.y = spawner.seatY;
+  spawner.enabled = false;
+  spawner.blockedByThicket = false;
+  spawner.dragging = false;
+}
+
+function resetSpawnersToSeats() {
+  layoutSpawnerSeats();
+
+  for (const kind of SPAWNER_KINDS) {
+    const spawner = state.spawners[kind];
+    spawner.wasEnabled = false;
+    spawner.visibleScale = 1;
+    spawner.nextSpawnIn = randomSpawnerInterval(kind);
+    snapSpawnerToSeat(kind);
+  }
+
+  state.draggedSpawnerKind = null;
+  state.draggedPointerId = null;
 }
 
 function applyThicketPressure(entity, dt) {
@@ -436,14 +267,7 @@ function resizeCanvas() {
   canvas.width = Math.round(rect.width * dpr);
   canvas.height = Math.round(rect.height * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  const analysisScale = CAMERA_TRACKER.analysisScale;
-  const analysisWidth = Math.max(1, Math.round(rect.width * analysisScale));
-  const analysisHeight = Math.max(1, Math.round(rect.height * analysisScale));
-  if (analysisCanvas.width !== analysisWidth || analysisCanvas.height !== analysisHeight) {
-    analysisCanvas.width = analysisWidth;
-    analysisCanvas.height = analysisHeight;
-  }
+  layoutSpawnerSeats();
 }
 
 function createPlant(x, y, options = {}) {
@@ -1379,30 +1203,7 @@ function spawnInitialWorld() {
   state.nextLinkId = 1;
   state.nextPacketId = 1;
   state.worldAge = 0;
-  state.spawners.herbivore.enabled = trackedDots.yellow.active;
-  state.spawners.herbivore.blockedByThicket = false;
-  state.spawners.herbivore.wasEnabled = trackedDots.yellow.active;
-  state.spawners.herbivore.visibleScale = trackedDots.yellow.active ? 1 : 0;
-  state.spawners.carnivore.enabled = trackedDots.red.active;
-  state.spawners.carnivore.blockedByThicket = false;
-  state.spawners.carnivore.wasEnabled = trackedDots.red.active;
-  state.spawners.carnivore.visibleScale = trackedDots.red.active ? 1 : 0;
-  state.spawners.plant.enabled = trackedDots.green.active;
-  state.spawners.plant.blockedByThicket = false;
-  state.spawners.plant.wasEnabled = trackedDots.green.active;
-  state.spawners.plant.visibleScale = trackedDots.green.active ? 1 : 0;
-  randomizeSpawnerPosition("herbivore");
-  randomizeSpawnerPosition("carnivore");
-  randomizeSpawnerPosition("plant");
-  state.spawners.herbivore.nextSpawnIn = trackedDots.yellow.active
-    ? randomInitialSpawnerInterval("herbivore")
-    : randomSpawnerInterval("herbivore");
-  state.spawners.carnivore.nextSpawnIn = trackedDots.red.active
-    ? randomInitialSpawnerInterval("carnivore")
-    : randomSpawnerInterval("carnivore");
-  state.spawners.plant.nextSpawnIn = trackedDots.green.active
-    ? randomInitialSpawnerInterval("plant")
-    : randomSpawnerInterval("plant");
+  resetSpawnersToSeats();
 
   for (let i = 0; i < WORLD.initialHerbivores; i += 1) {
     const point = getSpawnerSpawnPoint(state.spawners.herbivore);
@@ -2481,18 +2282,12 @@ function syncHud() {
 }
 
 function renderBackground() {
-  if (debugToggle.checked && state.cameraReady && cameraVideo.readyState >= 2) {
-    ctx.drawImage(cameraVideo, 0, 0, state.width, state.height);
-    ctx.fillStyle = "rgba(4, 12, 12, 0.42)";
-    ctx.fillRect(0, 0, state.width, state.height);
-  } else {
-    const gradient = ctx.createLinearGradient(0, 0, 0, state.height);
-    gradient.addColorStop(0, "#081112");
-    gradient.addColorStop(0.55, "#0b1515");
-    gradient.addColorStop(1, "#0d1716");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, state.width, state.height);
-  }
+  const gradient = ctx.createLinearGradient(0, 0, 0, state.height);
+  gradient.addColorStop(0, "#081112");
+  gradient.addColorStop(0.55, "#0b1515");
+  gradient.addColorStop(1, "#0d1716");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, state.width, state.height);
 
   const thicket = getThicketBounds();
   const edgeTint = "rgba(33, 70, 47, 0.2)";
@@ -3001,7 +2796,7 @@ function renderSpawner(kind, spawner) {
   }
 
   if (debugToggle.checked) {
-    const labelBase = kind === "herbivore" ? "YELLOW" : kind === "carnivore" ? "RED" : "GREEN";
+    const labelBase = kind === "herbivore" ? "HERBIVORE" : kind === "carnivore" ? "CARNIVORE" : "PLANT";
     const label = spawner.blockedByThicket ? `${labelBase} OFF` : labelBase;
     ctx.fillStyle = "rgba(226, 242, 236, 0.9)";
     ctx.font = "600 10px 'Trebuchet MS', 'Segoe UI', sans-serif";
@@ -3066,8 +2861,95 @@ function tick(timestamp) {
 function resetWorld() {
   resizeCanvas();
   spawnInitialWorld();
+  setSpawnerStatus("Drag a spawner into the ecosystem window");
   syncHud();
 }
+
+function getCanvasPoint(event) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: ((event.clientX - rect.left) / Math.max(rect.width, 1)) * state.width,
+    y: ((event.clientY - rect.top) / Math.max(rect.height, 1)) * state.height,
+  };
+}
+
+function findSpawnerAt(point) {
+  const hitRadius = WORLD.spawnerDragRadius + 10;
+
+  for (let i = SPAWNER_KINDS.length - 1; i >= 0; i -= 1) {
+    const kind = SPAWNER_KINDS[i];
+    const spawner = state.spawners[kind];
+    if (distanceBetween(point, spawner) <= hitRadius) {
+      return kind;
+    }
+  }
+
+  return null;
+}
+
+function updateDraggedSpawner(point) {
+  const kind = state.draggedSpawnerKind;
+  if (!kind) {
+    return;
+  }
+
+  const spawner = state.spawners[kind];
+  spawner.x = clamp(point.x, WORLD.spawnerDragRadius, state.width - WORLD.spawnerDragRadius);
+  spawner.y = clamp(point.y, WORLD.spawnerDragRadius, state.height - WORLD.spawnerDragRadius);
+  spawner.blockedByThicket = isPointInsideThicket(spawner.x, spawner.y);
+  spawner.enabled = !spawner.blockedByThicket;
+}
+
+function formatSpawnerKind(kind) {
+  return kind === "plant" ? "plant" : kind === "herbivore" ? "herbivore" : "carnivore";
+}
+
+canvas.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0 || state.draggedSpawnerKind) {
+    return;
+  }
+
+  const point = getCanvasPoint(event);
+  const kind = findSpawnerAt(point);
+  if (!kind) {
+    return;
+  }
+
+  const spawner = state.spawners[kind];
+  spawner.dragging = true;
+  state.draggedSpawnerKind = kind;
+  state.draggedPointerId = event.pointerId;
+  canvas.setPointerCapture(event.pointerId);
+  updateDraggedSpawner(point);
+  setSpawnerStatus(`Dragging ${formatSpawnerKind(kind)} spawner`);
+});
+
+canvas.addEventListener("pointermove", (event) => {
+  if (event.pointerId !== state.draggedPointerId) {
+    return;
+  }
+
+  updateDraggedSpawner(getCanvasPoint(event));
+});
+
+function releaseDraggedSpawner(event) {
+  if (event.pointerId !== state.draggedPointerId || !state.draggedSpawnerKind) {
+    return;
+  }
+
+  const kind = state.draggedSpawnerKind;
+  if (canvas.hasPointerCapture(event.pointerId)) {
+    canvas.releasePointerCapture(event.pointerId);
+  }
+
+  snapSpawnerToSeat(kind);
+  state.draggedSpawnerKind = null;
+  state.draggedPointerId = null;
+  setSpawnerStatus("Drag a spawner into the ecosystem window");
+}
+
+canvas.addEventListener("pointerup", releaseDraggedSpawner);
+canvas.addEventListener("pointercancel", releaseDraggedSpawner);
 
 speedInput.addEventListener("input", () => {
   state.speedMultiplier = Number(speedInput.value);
@@ -3104,6 +2986,5 @@ resizeCanvas();
 spawnInitialWorld();
 syncHud();
 syncFullscreenButton();
-setCameraStatus("Starting camera...");
-startCameraTracking();
+setSpawnerStatus("Drag a spawner into the ecosystem window");
 requestAnimationFrame(tick);
